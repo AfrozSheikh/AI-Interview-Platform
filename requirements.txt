@@ -1,10 +1,9 @@
 flask
 flask-session
 werkzeug
-google-generativeai
+requests
 textblob
 nltk
 PyPDF2
 pdfkit
-openai
 python-dotenv

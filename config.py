@@ -20,5 +20,6 @@ class Config:
     # Database
     DATABASE = 'database.sqlite'
     
-    # Gemini model
-    GEMINI_MODEL = 'gemini-2.0-flash-lite'  # Using the latest flash model
+    # Ollama Configuration
+    OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL') or 'http://localhost:11434'
+    OLLAMA_MODEL = 'llama3.2:1b'

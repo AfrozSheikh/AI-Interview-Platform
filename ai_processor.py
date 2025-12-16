@@ -1,4 +1,4 @@
-import google.generativeai as genai
+import requests
 import json
 import re
 from textblob import TextBlob
@@ -14,12 +14,34 @@ except LookupError:
 
 class AIProcessor:
     def __init__(self):
-        if not Config.GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY not set in environment variables")
-        
-        genai.configure(api_key=Config.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(Config.GEMINI_MODEL)
+        self.base_url = Config.OLLAMA_BASE_URL
+        self.model = Config.OLLAMA_MODEL
     
+    def _generate_content(self, prompt, json_mode=False):
+        """Helper to call Ollama API"""
+        url = f"{self.base_url}/api/generate"
+        
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+        }
+        
+        if json_mode:
+            payload["format"] = "json"
+            
+        try:
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            return response.json().get('response', '')
+        except requests.exceptions.RequestException as e:
+            print(f"Error calling Ollama API: {e}")
+            raise
+
     def extract_text_from_resume(self, resume_text):
         """Extract key information from resume text"""
         prompt = f"""
@@ -35,26 +57,31 @@ class AIProcessor:
         - projects: list of key projects
         - certifications: list of certifications
         
-        Return only JSON, no additional text.
+        Return only JSON object.
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
+            response_text = self._generate_content(prompt, json_mode=True)
             
             # Extract JSON from response
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
-            return {}
+            # Or try parsing directly if mode worked well
+            return json.loads(response_text)
         except Exception as e:
             print(f"Error extracting resume text: {e}")
-            return {}
+            # Fallback for parsing error
+            try:
+                # Cleaner retry if mixed output
+                return json.loads(response_text[response_text.find('{'):response_text.rfind('}')+1])
+            except:
+                return {}
     
     def generate_questions(self, resume_data, job_description, domain, experience_level, count=10):
         """Generate interview questions based on resume and JD"""
         prompt = f"""
-        You are an expert technical interviewer. Generate {count} interview questions for a {experience_level} level {domain} position.
+        You are an technical interviewer. Generate {count} interview questions for a {experience_level} level {domain} position.
         
         Resume Information:
         {json.dumps(resume_data, indent=2)}
@@ -62,34 +89,32 @@ class AIProcessor:
         Job Description:
         {job_description[:1000]}
         
-        Generate a mix of questions:
-        1. 3-4 Technical questions specific to {domain}
-        2. 2-3 Behavioral questions (use STAR method)
-        3. 2-3 Situational/Scenario-based questions
-        4. 1-2 Advanced/Problem-solving questions
+        Generate a list of questions including:
+        1. Technical questions specific to {domain}
+        2. Behavioral questions (STAR method)
+        3. Situational questions
         
-        For each question, provide:
-        - question_text: The actual question
+        Return a JSON ARRAY of objects. Each object must have:
+        - question_text: The question string
         - question_type: "technical", "behavioral", "situational", or "advanced"
         - difficulty: "easy", "medium", or "hard"
-        - category: e.g., "Python", "System Design", "Teamwork"
-        - time_allocated: Time in seconds (120 for easy, 180 for medium, 240 for hard)
+        - category: e.g., "Python", "System Design"
+        - time_allocated: Time in seconds (e.g. 120)
         
-        Return as a JSON list of questions.
+        Return ONLY valid JSON.
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
+            response_text = self._generate_content(prompt, json_mode=True)
             
             # Extract JSON from response
             json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
             if json_match:
                 questions = json.loads(json_match.group())
                 return questions[:count]
+            # Try direct parse
+            return json.loads(response_text)[:count]
             
-            # Fallback to some default questions
-            return self._get_default_questions(domain, experience_level, count)
         except Exception as e:
             print(f"Error generating questions: {e}")
             return self._get_default_questions(domain, experience_level, count)
@@ -132,73 +157,54 @@ class AIProcessor:
         
         # Generate AI feedback
         prompt = f"""
-        Analyze this interview answer and provide personalized feedback:
+        Analyze this interview answer:
 
         Question: {question}
         Candidate's Answer: {answer}
 
-        First, analyze the candidate's actual answer and identify:
-        1. What they did well in their response
-        2. What specific aspects could be improved
-        3. What key points or examples they mentioned
+        Provide detailed analysis as JSON with these keys:
+        - grammar_score: 0-10 score
+        - relevance_score: 0-10 score
+        - star_score: 0-10 score for STAR method usage
+        - detailed_feedback: Specific feedback text
+        - suggested_better_answer: A better version of the answer
+        - needs_cross_question: boolean (true if answer is vague/short)
+        - cross_question: Follow-up question if needed (string)
 
-        Then provide detailed analysis as JSON with these keys:
-        - grammar_score: 0-10 score for grammar and sentence structure
-        - relevance_score: 0-10 score for relevance to question
-        - star_score: 0-10 score for STAR method usage (Situation, Task, Action, Result)
-        - detailed_feedback: Specific, actionable feedback based on their actual answer
-        - suggested_better_answer: A personalized improvement of their answer that directly addresses the question and builds on what they said, not a generic response. Make it specific to both the question and their content.
-        - confidence_indicator: "low", "medium", or "high" based on answer quality
-
-        For the suggested_better_answer, DO NOT provide a generic template. Instead:
-        - Take their actual answer as a starting point
-        - Ensure the improved answer directly answers the specific question asked
-        - Improve their structure using STAR method where appropriate
-        - Add relevant details they might have missed that are relevant to the question
-        - Keep their core message but make it more professional and complete
-        - Make it sound natural, not robotic
-        - Make sure the suggested answer is tailored to the exact question being asked
-
-        Also evaluate if the candidate needs a cross-question because:
-        1. Answer is too short (< 30 words)
-        2. Answer is vague or unclear
-        3. Answer shows lack of depth
-
-        If cross-question is needed, provide:
-        - needs_cross_question: true
-        - cross_question: A follow-up question to probe deeper
-
-        Return only JSON, no additional text.
+        Return ONLY JSON.
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
+            response_text = self._generate_content(prompt, json_mode=True)
             
-            # Extract JSON from response
+            # clean potential markdown
+            response_text = response_text.replace('```json', '').replace('```', '')
+            
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 analysis = json.loads(json_match.group())
+            else:
+                analysis = json.loads(response_text)
                 
-                # Calculate confidence score (0-10)
-                confidence_score = (
-                    analysis.get('relevance_score', 5) * 0.3 +
-                    analysis.get('star_score', 5) * 0.3 +
-                    (1 + sentiment_score) * 5 * 0.2 +  # Convert -1 to 1 into 0-10
-                    max(0, 10 - (filler_count * 0.5)) * 0.2  # Penalize filler words
-                )
-                
-                return {
-                    'grammar_score': analysis.get('grammar_score', 5),
-                    'relevance_score': analysis.get('relevance_score', 5),
-                    'star_score': analysis.get('star_score', 5),
-                    'confidence_score': min(10, max(0, confidence_score)),
-                    'filler_words_count': filler_count,
-                    'feedback': analysis.get('detailed_feedback', 'No specific feedback available.'),
-                    'suggested_answer': analysis.get('suggested_better_answer', ''),
-                    'needs_cross_question': analysis.get('needs_cross_question', False),
-                    'cross_question': analysis.get('cross_question', '') if analysis.get('needs_cross_question') else ''
-                }
+            # Calculate confidence score (0-10)
+            confidence_score = (
+                analysis.get('relevance_score', 5) * 0.3 +
+                analysis.get('star_score', 5) * 0.3 +
+                (1 + sentiment_score) * 5 * 0.2 +  # Convert -1 to 1 into 0-10
+                max(0, 10 - (filler_count * 0.5)) * 0.2  # Penalize filler words
+            )
+            
+            return {
+                'grammar_score': analysis.get('grammar_score', 5),
+                'relevance_score': analysis.get('relevance_score', 5),
+                'star_score': analysis.get('star_score', 5),
+                'confidence_score': min(10, max(0, confidence_score)),
+                'filler_words_count': filler_count,
+                'feedback': analysis.get('detailed_feedback', 'No specific feedback available.'),
+                'suggested_answer': analysis.get('suggested_better_answer', ''),
+                'needs_cross_question': analysis.get('needs_cross_question', False),
+                'cross_question': analysis.get('cross_question', '')
+            }
         except Exception as e:
             print(f"Error analyzing answer: {e}")
         
@@ -218,22 +224,15 @@ class AIProcessor:
     def generate_cross_question(self, question, answer):
         """Generate a cross-question when answer is insufficient"""
         prompt = f"""
-        Based on this question and insufficient answer, generate a probing follow-up question:
-        
         Original Question: {question}
-        Candidate's Answer: {answer}
+        Answer: {answer}
         
-        The answer was too short/vague. Generate ONE follow-up question that will:
-        1. Probe deeper into the topic
-        2. Ask for specific examples
-        3. Challenge the candidate constructively
-        
-        Return only the question text.
+        The answer was too short/vague. Generate ONE follow-up question.
+        Return just the question text.
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            return response.text.strip()
+            return self._generate_content(prompt).strip()
         except:
             return "Could you provide a more detailed example or elaborate on that point?"
     
@@ -248,27 +247,28 @@ class AIProcessor:
         {user_code}
         
         Provide evaluation as JSON with:
-        - logic_score: 0-10 for logical correctness
-        - efficiency_score: 0-10 for time/space efficiency
-        - clarity_score: 0-10 for code readability and structure
+        - logic_score: 0-10
+        - efficiency_score: 0-10
+        - clarity_score: 0-10
         - test_cases_passed: estimated test cases passed (0-5)
-        - total_test_cases: 5 (assumed)
-        - detailed_feedback: Specific feedback on improvements
-        - suggested_improvements: How to improve the code
-        - time_complexity: Estimated time complexity
-        - space_complexity: Estimated space complexity
+        - total_test_cases: 5
+        - detailed_feedback: Specific feedback
+        - suggested_improvements: How to improve
+        - time_complexity: Big O
+        - space_complexity: Big O
         
-        Return only JSON.
+        Return ONLY JSON.
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
-            
+            response_text = self._generate_content(prompt, json_mode=True)
+             # clean potential markdown
+            response_text = response_text.replace('```json', '').replace('```', '')
+
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                evaluation = json.loads(json_match.group())
-                return evaluation
+                return json.loads(json_match.group())
+            return json.loads(response_text)
         except Exception as e:
             print(f"Error evaluating code: {e}")
         
@@ -289,28 +289,26 @@ class AIProcessor:
         """Generate a coding problem statement"""
         prompt = f"""
         Generate a {difficulty} level coding problem for {domain} domain.
-        The problem should be solvable in 10-15 minutes and test:
-        1. Basic programming logic
-        2. Problem-solving approach
-        3. Clean code practices
         
         Provide as JSON with:
-        - problem_statement: Clear description of the problem
+        - problem_statement: Clear description
         - example_input: Example input
-        - example_output: Expected output for example
-        - constraints: Any constraints (time/space)
-        - hints: 1-2 hints for solving
+        - example_output: Expected output
+        - constraints: Any constraints
+        - hints: list of hints
         
-        Return only JSON.
+        Return ONLY JSON.
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
-            
+            response_text = self._generate_content(prompt, json_mode=True)
+            # clean potential markdown
+            response_text = response_text.replace('```json', '').replace('```', '')
+
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
+            return json.loads(response_text)
         except:
             pass
         
@@ -326,39 +324,40 @@ class AIProcessor:
     def generate_final_report(self, session_data, answers_data, coding_data):
         """Generate final performance report"""
         prompt = f"""
-        Generate a comprehensive interview performance report.
+        Generate an interview performance report.
         
-        Interview Session Details:
-        - Domain: {session_data.get('domain')}
-        - Experience Level: {session_data.get('experience_level')}
+        Domain: {session_data.get('domain')}
+        Level: {session_data.get('experience_level')}
         
-        Performance Analysis:
+        Performance:
         {json.dumps(answers_data, indent=2)}
         
-        Coding Test Results:
+        Coding:
         {json.dumps(coding_data, indent=2) if coding_data else 'No coding test'}
         
-        Provide a detailed report as JSON with:
-        - overall_score: 0-100 overall performance
-        - strengths: list of 3-5 strengths
-        - weaknesses: list of 3-5 areas to improve
-        - communication_score: 0-10 for communication skills
-        - technical_score: 0-10 for technical knowledge
-        - confidence_score: 0-10 for confidence level
-        - improvement_plan: 5-7 specific actionable recommendations
+        Provide detailed report as JSON with:
+        - overall_score: 0-100
+        - strengths: list of 3-5 items
+        - weaknesses: list of 3-5 items
+        - communication_score: 0-10
+        - technical_score: 0-10
+        - confidence_score: 0-10
+        - improvement_plan: list of 5-7 items
         - final_verdict: "Strong Candidate", "Needs Improvement", or "Not Ready"
-        - detailed_analysis: Paragraph summarizing performance
+        - detailed_analysis: a paragraph
         
-        Return only JSON.
+        Return ONLY JSON.
         """
         
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
-            
+            response_text = self._generate_content(prompt, json_mode=True)
+            # clean potential markdown
+            response_text = response_text.replace('```json', '').replace('```', '')
+
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
+            return json.loads(response_text)
         except Exception as e:
             print(f"Error generating report: {e}")
         
