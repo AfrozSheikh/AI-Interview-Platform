@@ -250,11 +250,12 @@ def get_session_performance(session_id):
     
     # Get session info
     cursor.execute('''
-        SELECT * FROM interview_sessions 
+        SELECT * FROM interview_sessions
         WHERE id = ?
     ''', (session_id,))
-    
-    session = dict(cursor.fetchone()) if cursor.fetchone() else None
+
+    session_row = cursor.fetchone()
+    session = dict(session_row) if session_row else None
     
     conn.close()
     

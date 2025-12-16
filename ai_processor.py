@@ -132,28 +132,40 @@ class AIProcessor:
         
         # Generate AI feedback
         prompt = f"""
-        Analyze this interview answer:
-        
+        Analyze this interview answer and provide personalized feedback:
+
         Question: {question}
-        Answer: {answer}
-        
-        Provide detailed analysis as JSON with these keys:
+        Candidate's Answer: {answer}
+
+        First, analyze the candidate's actual answer and identify:
+        1. What they did well in their response
+        2. What specific aspects could be improved
+        3. What key points or examples they mentioned
+
+        Then provide detailed analysis as JSON with these keys:
         - grammar_score: 0-10 score for grammar and sentence structure
         - relevance_score: 0-10 score for relevance to question
         - star_score: 0-10 score for STAR method usage (Situation, Task, Action, Result)
-        - detailed_feedback: Specific feedback on improvements
-        - suggested_better_answer: A better way to answer this question
+        - detailed_feedback: Specific, actionable feedback based on their actual answer
+        - suggested_better_answer: A personalized improvement of their answer that builds on what they said, not a generic response. Make it specific to their content and context.
         - confidence_indicator: "low", "medium", or "high" based on answer quality
-        
+
+        For the suggested_better_answer, DO NOT provide a generic template. Instead:
+        - Take their actual answer as a starting point
+        - Improve their structure using STAR method
+        - Add relevant details they might have missed
+        - Keep their core message but make it more professional and complete
+        - Make it sound natural, not robotic
+
         Also evaluate if the candidate needs a cross-question because:
         1. Answer is too short (< 30 words)
         2. Answer is vague or unclear
         3. Answer shows lack of depth
-        
+
         If cross-question is needed, provide:
         - needs_cross_question: true
         - cross_question: A follow-up question to probe deeper
-        
+
         Return only JSON, no additional text.
         """
         

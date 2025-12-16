@@ -139,14 +139,21 @@ class InterviewManager {
     
     async submitAnswer() {
         this.stopTimer();
-        
+
         const questionId = document.getElementById('current-question-id').value;
-        const answerText = document.getElementById('answer-text').value;
+        let answerText = document.getElementById('answer-text').value;
         const transcript = window.speechManager ? window.speechManager.getTranscript() : '';
         const duration = 120 - this.timeLeft; // Time spent on answer
-        
-        if (!answerText.trim() && !transcript.trim()) {
-            alert('Please provide an answer before submitting.');
+
+        // Combine typed answer and speech transcript if both exist
+        if (answerText.trim() && transcript.trim()) {
+            answerText = answerText.trim() + ' ' + transcript.trim();
+        } else if (transcript.trim()) {
+            answerText = transcript.trim();
+        }
+
+        if (!answerText.trim()) {
+            alert('Please provide an answer before submitting. Please type or speak your answer.');
             return;
         }
         
@@ -258,17 +265,16 @@ class InterviewManager {
     }
     
     async nextQuestion() {
-        this.currentQuestionIndex++;
-        
         try {
             const response = await fetch('/api/next-question', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.status === 'success') {
+                this.currentQuestionIndex = data.current_index + 1; // Sync with server
                 this.displayQuestion(data.question);
                 this.questions.push(data.question);
             } else if (data.status === 'completed') {

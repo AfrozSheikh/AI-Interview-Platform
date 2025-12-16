@@ -5,7 +5,7 @@ load_dotenv()
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-123-change-in-production'
-    GEMINI_API_KEY = "Your gemini api key "
+    GEMINI_API_KEY = "AIzaSyBW7F3CDLnIi3t4n9Lf8cFmj8RkebKW_-k"
     UPLOAD_FOLDER = 'uploads'
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     SESSION_TYPE = 'filesystem'
