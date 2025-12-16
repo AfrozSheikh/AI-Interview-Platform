@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_session import Session
 import os
 import json
@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 import PyPDF2
 
 from config import Config
-from database import init_db, save_interview_session, save_question, save_answer, save_coding_test, get_session_performance
+from database import init_db, save_interview_session, save_question, save_answer, save_coding_test
 from ai_processor import AIProcessor
 from code_sandbox import CodeSandbox
 from report_generator import ReportGenerator
@@ -167,15 +167,18 @@ def next_question():
     """Get next question"""
     current_index = session.get('current_question_index', 0)
     questions = session.get('questions', [])
-    
+
     if current_index >= len(questions):
         return jsonify({
             'status': 'completed',
             'message': 'All questions completed'
         })
-    
+
     question = questions[current_index]
-    
+
+    # Update session index for next call
+    session['current_question_index'] = current_index + 1
+
     return jsonify({
         'status': 'success',
         'question': question,
@@ -313,7 +316,7 @@ def evaluate_code():
 def feedback():
     """Show feedback page"""
     answers = session.get('answers', [])
-    
+
     # Calculate averages
     if answers:
         avg_scores = {
@@ -324,75 +327,38 @@ def feedback():
         }
     else:
         avg_scores = {'grammar': 0, 'relevance': 0, 'confidence': 0, 'star': 0}
-    
-    return render_template('feedback.html', 
+
+    return render_template('feedback.html',
                          answers=answers,
                          avg_scores=avg_scores)
 
 @app.route('/generate-report')
 def generate_report():
     """Generate and display final report"""
-    session_id = session.get('session_id')
-    
-    if not session_id:
-        return redirect(url_for('index'))
-    
     # Get session data
-    performance_data = get_session_performance(session_id)
-    
-    # Generate AI report
     session_data = {
-        'domain': session.get('domain'),
-        'experience_level': session.get('experience_level')
+        'domain': session.get('domain', 'Software Engineering'),
+        'experience_level': session.get('experience_level', 'Entry Level')
     }
-    
-    answers_for_report = []
-    for answer in performance_data['answers']:
-        answers_for_report.append({
-            'question_text': answer.get('question_text', 'N/A'),
-            'grammar_score': answer.get('grammar_score', 0),
-            'relevance_score': answer.get('relevance_score', 0),
-            'confidence_score': answer.get('confidence_score', 0),
-            'feedback': answer.get('feedback', '')
-        })
-    
-    coding_for_report = performance_data['coding_tests'][0] if performance_data['coding_tests'] else {}
-    
-    ai_report = ai_processor.generate_final_report(
-        session_data,
-        answers_for_report,
-        coding_for_report
-    )
-    
-    # Generate HTML report
-    html_report = ReportGenerator.generate_html_report(
-        session_data,
-        ai_report,
-        answers_for_report,
-        coding_for_report
-    )
-    
-    # Store in session for PDF generation
-    session['html_report'] = html_report
-    session['ai_report'] = ai_report
-    
-    return render_template('report.html', 
-                         report=ai_report,
-                         answers=answers_for_report,
-                         coding_test=coding_for_report)
 
-@app.route('/download-report')
-def download_report():
-    """Download report as PDF"""
-    html_report = session.get('html_report', '')
-    
-    if not html_report:
-        return redirect(url_for('generate_report'))
-    
-    # Generate PDF
-    pdf_path = ReportGenerator.generate_pdf(html_report)
-    
-    return send_file(pdf_path, as_attachment=True)
+    # Get answers data
+    answers_data = session.get('answers', [])
+
+    # Get coding test data
+    coding_data = session.get('coding_test', {})
+
+    # Generate final report using AI
+    report = ai_processor.generate_final_report(session_data, answers_data, coding_data)
+
+    # Store report in session for potential download
+    session['final_report'] = report
+
+    return render_template('report.html',
+                         report=report,
+                         answers=answers_data,
+                         coding_test=coding_data if coding_data else None)
+
+
 
 @app.route('/api/speech-status', methods=['POST'])
 def speech_status():

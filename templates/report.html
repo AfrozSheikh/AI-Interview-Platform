@@ -133,7 +133,7 @@
                         <tr class="border-b hover:bg-gray-50">
                             <td class="p-4">{{ answer.question_text[:60] }}...</td>
                             <td class="p-4 text-center">
-                                <span class="inline-block w-10 h-10 leading-10 rounded-full 
+                                <span class="inline-block w-10 h-10 leading-10 rounded-full
                                              {% if answer.grammar_score >= 8 %}bg-green-100 text-green-800
                                              {% elif answer.grammar_score >= 6 %}bg-yellow-100 text-yellow-800
                                              {% else %}bg-red-100 text-red-800{% endif %}">
@@ -141,7 +141,7 @@
                                 </span>
                             </td>
                             <td class="p-4 text-center">
-                                <span class="inline-block w-10 h-10 leading-10 rounded-full 
+                                <span class="inline-block w-10 h-10 leading-10 rounded-full
                                              {% if answer.relevance_score >= 8 %}bg-green-100 text-green-800
                                              {% elif answer.relevance_score >= 6 %}bg-yellow-100 text-yellow-800
                                              {% else %}bg-red-100 text-red-800{% endif %}">
@@ -149,7 +149,7 @@
                                 </span>
                             </td>
                             <td class="p-4 text-center">
-                                <span class="inline-block w-10 h-10 leading-10 rounded-full 
+                                <span class="inline-block w-10 h-10 leading-10 rounded-full
                                              {% if answer.confidence_score >= 8 %}bg-green-100 text-green-800
                                              {% elif answer.confidence_score >= 6 %}bg-yellow-100 text-yellow-800
                                              {% else %}bg-red-100 text-red-800{% endif %}">
@@ -157,11 +157,8 @@
                                 </span>
                             </td>
                             <td class="p-4 text-center">
-                                <span class="inline-block w-10 h-10 leading-10 rounded-full 
-                                             {% if answer.star_score >= 8 %}bg-green-100 text-green-800
-                                             {% elif answer.star_score >= 6 %}bg-yellow-100 text-yellow-800
-                                             {% else %}bg-red-100 text-red-800{% endif %}">
-                                    {{ answer.star_score }}
+                                <span class="inline-block w-10 h-10 leading-10 rounded-full bg-gray-100 text-gray-800">
+                                    N/A
                                 </span>
                             </td>
                         </tr>
