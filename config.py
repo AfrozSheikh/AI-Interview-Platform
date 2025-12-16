@@ -5,7 +5,7 @@ load_dotenv()
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-123-change-in-production'
-    GEMINI_API_KEY = ""
+    GEMINI_API_KEY = "Your_api_key_here"
     UPLOAD_FOLDER = 'uploads'
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     SESSION_TYPE = 'filesystem'
@@ -21,4 +21,4 @@ class Config:
     DATABASE = 'database.sqlite'
     
     # Gemini model
-    GEMINI_MODEL = 'gemini-2.5-flash'  # Using the latest flash model
+    GEMINI_MODEL = 'gemini-2.0-flash-lite'  # Using the latest flash model

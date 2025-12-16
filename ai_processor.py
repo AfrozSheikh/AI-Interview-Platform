@@ -147,15 +147,17 @@ class AIProcessor:
         - relevance_score: 0-10 score for relevance to question
         - star_score: 0-10 score for STAR method usage (Situation, Task, Action, Result)
         - detailed_feedback: Specific, actionable feedback based on their actual answer
-        - suggested_better_answer: A personalized improvement of their answer that builds on what they said, not a generic response. Make it specific to their content and context.
+        - suggested_better_answer: A personalized improvement of their answer that directly addresses the question and builds on what they said, not a generic response. Make it specific to both the question and their content.
         - confidence_indicator: "low", "medium", or "high" based on answer quality
 
         For the suggested_better_answer, DO NOT provide a generic template. Instead:
         - Take their actual answer as a starting point
-        - Improve their structure using STAR method
-        - Add relevant details they might have missed
+        - Ensure the improved answer directly answers the specific question asked
+        - Improve their structure using STAR method where appropriate
+        - Add relevant details they might have missed that are relevant to the question
         - Keep their core message but make it more professional and complete
         - Make it sound natural, not robotic
+        - Make sure the suggested answer is tailored to the exact question being asked
 
         Also evaluate if the candidate needs a cross-question because:
         1. Answer is too short (< 30 words)

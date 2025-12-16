@@ -104,10 +104,12 @@ class SpeechRecognitionManager {
         };
         
         // Button click handler
-        this.speechButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            this.toggleSpeechRecognition();
-        });
+        if (this.speechButton) {
+            this.speechButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleSpeechRecognition();
+            });
+        }
         
         // Initialize UI
         this.updateUI();

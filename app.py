@@ -10,7 +10,12 @@ from config import Config
 from database import init_db, save_interview_session, save_question, save_answer, save_coding_test
 from ai_processor import AIProcessor
 from code_sandbox import CodeSandbox
-from report_generator import ReportGenerator
+
+# Import report generator if available
+try:
+    from report_generator import ReportGenerator
+except ImportError:
+    ReportGenerator = None
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -194,21 +199,21 @@ def analyze_answer():
     answer_text = data.get('answer_text', '')
     transcript = data.get('transcript', '')
     duration = data.get('duration', 0)
-    
-    # Get current question
-    current_index = session.get('current_question_index', 0)
+
+    # Get current question (use the question that was just answered, not the next one)
+    current_index = session.get('current_question_index', 0) - 1  # Subtract 1 because it was incremented in next_question
     questions = session.get('questions', [])
-    
-    if current_index < len(questions):
+
+    if current_index >= 0 and current_index < len(questions):
         current_question = questions[current_index]
-        
+
         # Analyze answer
         analysis = ai_processor.analyze_answer(
             question=current_question['question_text'],
             answer=answer_text,
             transcript=transcript
         )
-        
+
         # Save answer
         answer_data = {
             'question_id': question_id,
@@ -224,29 +229,26 @@ def analyze_answer():
             'feedback': analysis['feedback'],
             'cross_question_asked': analysis['needs_cross_question']
         }
-        
+
         answer_id = save_answer(answer_data)
-        
+
         # Store in session
         answer_data['id'] = answer_id
         answer_data['question_text'] = current_question['question_text']
         session['answers'].append(answer_data)
-        
-        # Update question index
-        session['current_question_index'] = current_index + 1
-        
+
         response = {
             'status': 'success',
             'analysis': analysis,
-            'next_question_available': (current_index + 1) < len(questions)
+            'next_question_available': session.get('current_question_index', 0) < len(questions)
         }
-        
+
         if analysis['needs_cross_question']:
             response['cross_question'] = analysis['cross_question']
-        
+
         return jsonify(response)
-    
-    return jsonify({'status': 'error', 'message': 'No more questions'})
+
+    return jsonify({'status': 'error', 'message': 'No current question to analyze'})
 
 @app.route('/coding-test')
 def coding_test():

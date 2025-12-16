@@ -83,16 +83,21 @@ class InterviewManager {
     setupEventListeners() {
         // Submit answer
         document.getElementById('submit-answer').addEventListener('click', () => this.submitAnswer());
-        
-        // Skip question
-        document.getElementById('skip-question').addEventListener('click', () => this.skipQuestion());
-        
+
+        // x question
+        const skipBtn = document.getElementById('skip-question');
+        if (skipBtn) {
+            skipBtn.addEventListener('click', () => this.skipQuestion());
+        }
+
         // Finish interview
         document.getElementById('finish-interview').addEventListener('click', () => this.finishInterview());
-        
-        // Next question
-        document.getElementById('next-question-btn').addEventListener('click', () => this.nextQuestion());
-        
+
+        // Next question - store reference for later removal
+        this.nextQuestionBtn = document.getElementById('next-question-btn');
+        this.nextQuestionHandler = () => this.nextQuestion();
+        this.nextQuestionBtn.addEventListener('click', this.nextQuestionHandler);
+
         // Timer controls
         document.getElementById('start-timer').addEventListener('click', () => this.startTimer());
         document.getElementById('stop-timer').addEventListener('click', () => this.stopTimer());
@@ -191,7 +196,7 @@ class InterviewManager {
         const feedbackArea = document.getElementById('feedback-area');
         const feedbackContent = document.getElementById('feedback-content');
         const nextBtn = document.getElementById('next-question-btn');
-        
+
         // Build feedback HTML
         let feedbackHTML = `
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -212,18 +217,18 @@ class InterviewManager {
                     <div class="text-sm text-purple-600">STAR Method</div>
                 </div>
             </div>
-            
+
             <div class="p-4 bg-gray-50 rounded-lg mb-4">
                 <h4 class="font-bold mb-2">Filler Words:</h4>
                 <p>${analysis.filler_words_count} filler words detected (um, uh, like, etc.)</p>
             </div>
-            
+
             <div class="p-4 bg-green-50 rounded-lg mb-4">
                 <h4 class="font-bold mb-2">AI Feedback:</h4>
                 <p>${analysis.feedback}</p>
             </div>
         `;
-        
+
         if (analysis.suggested_answer) {
             feedbackHTML += `
                 <div class="p-4 bg-blue-50 rounded-lg mb-4">
@@ -232,7 +237,7 @@ class InterviewManager {
                 </div>
             `;
         }
-        
+
         if (analysis.cross_question) {
             feedbackHTML += `
                 <div class="p-4 bg-yellow-50 rounded-lg">
@@ -241,19 +246,19 @@ class InterviewManager {
                 </div>
             `;
         }
-        
+
         feedbackContent.innerHTML = feedbackHTML;
-        
-        // Update next button text
+
+        // Update next button text and set up single handler
         if (hasNextQuestion) {
             nextBtn.innerHTML = 'Next Question <i class="fas fa-arrow-right ml-2"></i>';
         } else {
             nextBtn.innerHTML = 'Continue to Coding Test <i class="fas fa-arrow-right ml-2"></i>';
-            nextBtn.onclick = () => {
-                window.location.href = '/coding-test';
-            };
         }
-        
+
+        // Set up single click handler that handles both cases
+        nextBtn.onclick = () => this.handleNextAction();
+
         // Show feedback area
         feedbackArea.classList.remove('hidden');
     }
@@ -290,6 +295,31 @@ class InterviewManager {
         window.location.href = '/coding-test';
     }
     
+    handleNextAction() {
+        // Check if there are more questions by calling the API
+        fetch('/api/next-question', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // There are more questions, load the next one
+                this.currentQuestionIndex = data.current_index + 1;
+                this.displayQuestion(data.question);
+                this.questions.push(data.question);
+            } else if (data.status === 'completed') {
+                // No more questions, redirect to coding test
+                window.location.href = '/coding-test';
+            }
+        })
+        .catch(error => {
+            console.error('Error checking for next question:', error);
+            // Fallback: assume no more questions and redirect to coding test
+            window.location.href = '/coding-test';
+        });
+    }
+
     finishInterview() {
         if (confirm('Are you sure you want to finish the interview? This will end the session.')) {
             window.location.href = '/feedback';
